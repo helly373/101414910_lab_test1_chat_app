@@ -49,7 +49,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 localStorage.setItem("token", data.token);
                 localStorage.setItem("username", data.username);
                 alert("Login successful!");
-                window.location.href = "chat.html"; // Redirect to chat page
+                window.location.href = "join-room.html"; // Redirect to chat page
             } else {
                 alert(data.message || "Login failed.");
             }

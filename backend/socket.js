@@ -4,13 +4,16 @@ module.exports = function (io) {
     const users = {}; // ✅ Store connected users with socket IDs
 
     io.on("connection", (socket) => {
-        console.log("🔌 New user connected");
+        console.log("🔌 New user connected:", socket.id);
 
         // ✅ Handle user joining a room
         socket.on("joinRoom", async ({ username, room }) => {
             socket.join(room);
             users[username] = socket.id; // ✅ Store user socket ID
 
+            console.log(`📌 ${username} joined public room: ${room}`);
+
+            io.to(room).emit("roomMembers", users[room]);
             // ✅ Send previous messages from MongoDB
             const messages = await Message.find({ room }).sort({ timestamp: 1 });
             socket.emit("loadMessages", messages);
@@ -18,41 +21,19 @@ module.exports = function (io) {
             io.to(room).emit("message", { username: "System", message: `${username} joined ${room}` });
         });
 
+        // ✅ Handle public chat messages
         socket.on("chatMessage", async ({ username, room, message }) => {
-            console.log(`📨 Message received from ${username} in room ${room}: ${message}`);
-        
-            // ✅ Save the message with the correct username
+            console.log(`📨 Public Message from ${username} in room ${room}: ${message}`);
+
+            // ✅ Save the message in MongoDB
             const newMessage = new Message({ username, room, message });
             await newMessage.save();
-        
-            // ✅ Ensure the correct username is sent in the broadcast
-            io.to(room).emit("message", { username: username, message });
+
+            // ✅ Send the message to the room
+            io.to(room).emit("message", { username, message });
         });
 
-        // ✅ Handle private messaging
-        socket.on("privateMessage", async ({ sender, receiver, message }) => {
-            const receiverSocketId = users[receiver]; // ✅ Get receiver’s socket ID
-
-            console.log(`📨 Private Message from ${sender} to ${receiver}: ${message}`);
-
-            if (receiverSocketId) {
-                // ✅ Send private message directly to the receiver
-                io.to(receiverSocketId).emit("privateMessage", { sender, message });
-            } else {
-                // ✅ Notify sender that the recipient is offline
-                socket.emit("message", { username: "System", message: `${receiver} is not online.` });
-            }
-
-            // ✅ Save private message to MongoDB
-            const newMessage = new Message({
-                username: sender,
-                receiver,
-                room: "private",
-                message,
-            });
-            await newMessage.save();
-        });
-
+    
 
         // ✅ Typing indicator functionality
         socket.on("typing", ({ username, room }) => {
@@ -63,18 +44,46 @@ module.exports = function (io) {
             socket.to(room).emit("hideTyping");
         });
 
-        // ✅ Handle user leaving a room
         socket.on("leaveRoom", ({ username, room }) => {
             socket.leave(room);
-            io.to(room).emit("message", { username: "System", message: `${username} has left the room.` });
-            delete users[username]; // ✅ Remove user from tracking
+        
+            if (Array.isArray(users[room])) {
+                users[room] = users[room].filter(user => user !== username);
+            }
+        
+            console.log(`🚪 ${username} left room: ${room}`);
+            console.log(`🔴 Current members in ${room}:`, users[room]);
+        
+            io.to(room).emit("roomMembers", users[room]); // ✅ Emit updated member list
         });
 
-        // ✅ Handle user disconnecting
-        socket.on("disconnect", () => {
-            const user = Object.keys(users).find((key) => users[key] === socket.id);
-            if (user) delete users[user]; // ✅ Remove user from tracking
-            console.log("❌ User disconnected");
-        });
+            //         // Add this near your other socket listeners
+            // socket.on("roomMembers", (members) => {
+            //     console.log("Received room members:", members); // Add this debug line
+            //     updateMembersList(members);
+            // });
+
+            socket.on("disconnect", () => {
+                let disconnectedUser = null;
+                
+                for (const room in users) {
+                    if (Array.isArray(users[room])) { // ✅ Ensure it's an array before filtering
+                        users[room] = users[room].filter(user => {
+                            if (user === socket.username) {
+                                disconnectedUser = user;
+                                return false; // Remove user
+                            }
+                            return true;
+                        });
+            
+                        io.to(room).emit("roomMembers", users[room]); // ✅ Update the room members
+                    }
+                }
+            
+                if (disconnectedUser) {
+                    console.log(`❌ ${disconnectedUser} disconnected from chat.`);
+                }
+            });
+             
     });
 };

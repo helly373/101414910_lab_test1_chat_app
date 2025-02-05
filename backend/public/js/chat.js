@@ -1,25 +1,19 @@
 const socket = io();
 const username = localStorage.getItem("username");
 
-// ✅ Get room from URL parameters first
 const urlParams = new URLSearchParams(window.location.search);
 let room = urlParams.get("room");
 
 if (!room) {
-    // ✅ Fallback to sessionStorage only if no room is found in URL
-    room = sessionStorage.getItem("chatRoom");
-}
-
+    room = sessionStorage.getItem("chatRoom");}
 if (!username || !room) {
     window.location.href = "join-room.html"; // Redirect if no username or room
 } else {
     document.getElementById("roomName").innerText = room;
 }
 
-// ✅ Store the room in sessionStorage (per-tab storage, avoids overwriting in different tabs)
 sessionStorage.setItem("chatRoom", room);
 
-//  Fetch previous messages (Room-based chat)
 fetch(`/api/messages/${room}`)
     .then(response => response.json())
     .then(messages => {
@@ -31,29 +25,45 @@ fetch(`/api/messages/${room}`)
         });
     });
 
-// ✅ Emit joinRoom event with correct room
 socket.emit("joinRoom", { username, room });
 
-//  Receive room messages
 socket.on("message", (data) => {
     const chatBox = document.getElementById("chatBox");
-
-    // ✅ Ensure correct sender name appears
     const messageDiv = document.createElement("div");
+    messageDiv.className = "message";
     
-    if (data.username === username) {
-        // ✅ Show "You" for the current user
-        messageDiv.innerHTML = `<strong>(You):</strong> ${data.message}`;
-    } else {
-        // ✅ Show the actual sender's name
-        messageDiv.innerHTML = `<strong>${data.username}:</strong> ${data.message}`;
-    }
+    const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    
+    messageDiv.innerHTML = `
+        <div class="sender">${data.username} ${time}</div>
+        <div class="content">${data.message}</div>
+    `;
     
     chatBox.appendChild(messageDiv);
     chatBox.scrollTop = chatBox.scrollHeight;
 });
+socket.on("roomMembers", (members) => {
+    console.log("Received room members:", members); // ✅ Debugging
+    updateMembersList(members);
+});
+function updateMembersList(members) {
+    console.log("Updating members list with:", members); // Add debug logging
+    const membersList = document.getElementById("membersList");
+    if (!membersList) {
+        console.error("membersList element not found!");
+        return;
+    }
+    if (!Array.isArray(members)) {
+        console.error("members is not an array:", members);
+        return;
+    }
+    membersList.innerHTML = members.map(member => `
+        <div class="member">${member}</div>
+    `).join('');
+}
 
-// Typing event logic
+
+
 const messageInput = document.getElementById("messageInput");
 let typingTimer;
 
@@ -66,19 +76,16 @@ messageInput.addEventListener("input", () => {
     }, 1500);
 });
 
-// Show "User is typing..." indicator
 socket.on("displayTyping", ({ username }) => {
     console.log(`${username} is typing...`); // Debugging
     const typingDiv = document.getElementById("typingIndicator");
     typingDiv.innerHTML = `<em>${username} is typing...</em>`;
 });
 
-// Hide typing indicator
 socket.on("hideTyping", () => {
     document.getElementById("typingIndicator").innerHTML = "";
 });
 
-// Send public message
 function sendMessage() {
     const message = document.getElementById("messageInput").value;
     if (message.trim() !== "") {
@@ -87,33 +94,6 @@ function sendMessage() {
     }
 }
 
-//  Send private message
-function sendPrivateMessage() {
-    const receiver = document.getElementById("privateUser").value.trim();
-    const privateMessage = document.getElementById("privateMessage").value.trim();
-
-    if (receiver !== "" && privateMessage !== "") {
-        socket.emit("privateMessage", { sender: username, receiver, message: privateMessage });
-        document.getElementById("privateMessage").value = "";
-
-        const chatBox = document.getElementById("chatBox");
-        const messageDiv = document.createElement("div");
-        messageDiv.innerHTML = `<strong>(Private) To ${receiver}:</strong> ${privateMessage}`;
-        chatBox.appendChild(messageDiv);
-        chatBox.scrollTop = chatBox.scrollHeight;
-    }
-}
-
-// Receive private messages
-socket.on("privateMessage", ({ sender, message }) => {
-    const chatBox = document.getElementById("chatBox");
-    const messageDiv = document.createElement("div");
-    messageDiv.innerHTML = `<strong>(Private) ${sender}:</strong> ${message}`;
-    chatBox.appendChild(messageDiv);
-    chatBox.scrollTop = chatBox.scrollHeight;
-});
-
-// Handle user leaving the room
 function leaveRoom() {
     socket.emit("leaveRoom", { username, room }); // Notify server
     sessionStorage.removeItem("chatRoom"); // ✅ Remove room only for this tab

@@ -1,7 +1,7 @@
 function joinRoom() {
     const room = document.getElementById("roomSelect").value;
-    localStorage.setItem("chatRoom", room); // Store the selected room in localStorage
-    window.location.href = "chat.html"; // Redirect to chat page
+    sessionStorage.setItem("chatRoom", room); // Store the selected room in localStorage
+    window.location.href = `chat.html?room=${encodeURIComponent(room)}`;// Redirect to chat page
 }
 
 function startPrivateChat() {

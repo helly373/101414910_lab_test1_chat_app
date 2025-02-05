@@ -1,12 +1,23 @@
 const socket = io();
 const username = localStorage.getItem("username");
-const room = localStorage.getItem("chatRoom");
+
+// ✅ Get room from URL parameters first
+const urlParams = new URLSearchParams(window.location.search);
+let room = urlParams.get("room");
+
+if (!room) {
+    // ✅ Fallback to sessionStorage only if no room is found in URL
+    room = sessionStorage.getItem("chatRoom");
+}
 
 if (!username || !room) {
     window.location.href = "join-room.html"; // Redirect if no username or room
+} else {
+    document.getElementById("roomName").innerText = room;
 }
 
-document.getElementById("roomName").innerText = room;
+// ✅ Store the room in sessionStorage (per-tab storage, avoids overwriting in different tabs)
+sessionStorage.setItem("chatRoom", room);
 
 //  Fetch previous messages (Room-based chat)
 fetch(`/api/messages/${room}`)
@@ -20,6 +31,7 @@ fetch(`/api/messages/${room}`)
         });
     });
 
+// ✅ Emit joinRoom event with correct room
 socket.emit("joinRoom", { username, room });
 
 //  Receive room messages
@@ -104,7 +116,6 @@ socket.on("privateMessage", ({ sender, message }) => {
 // Handle user leaving the room
 function leaveRoom() {
     socket.emit("leaveRoom", { username, room }); // Notify server
-    localStorage.removeItem("chatRoom"); // Remove room from local storage
-    localStorage.removeItem("username"); // Remove username for safety
+    sessionStorage.removeItem("chatRoom"); // ✅ Remove room only for this tab
     window.location.href = "../view/join-room.html"; // Redirect to the join-room page
 }

@@ -3,7 +3,7 @@ const Message = require("../models/Message");
 
 const router = express.Router();
 
-// ✅ Get messages from a specific room
+// Get messages from a specific room
 router.get("/:room", async (req, res) => {
     try {
         const messages = await Message.find({ room: req.params.room }).sort({ timestamp: 1 });
@@ -30,7 +30,7 @@ router.get("/messages/private/:user1/:user2", async (req, res) => {
 });
 
 
-// ✅ Send a private message
+// Send a private message
 router.post("/private", async (req, res) => {
     const { sender, receiver, message } = req.body;
 

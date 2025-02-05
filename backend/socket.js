@@ -1,49 +1,76 @@
+/**
+ * Socket.IO chat module.
+ * 
+ * This module handles real-time chat functionality using Socket.IO. It manages user connections,
+ * room join/leave events, message broadcasting, typing indicators, and message storage in MongoDB.
+ */
+
 const Message = require("./models/Message");
 
 module.exports = function (io) {
-    const users = {}; // ✅ Store connected users with socket IDs
+    const users = {}; // Stores connected users with their socket IDs
 
     io.on("connection", (socket) => {
-        console.log("🔌 New user connected:", socket.id);
+        console.log("New user connected:", socket.id);
 
-        // ✅ Handle user joining a room
+        /**
+         * Handles user joining a chat room.
+         * - Adds the user to the specified room.
+         * - Stores the user's socket ID.
+         * - Sends the list of current room members.
+         * - Loads previous messages from MongoDB and sends them to the user.
+         * - Broadcasts a system message announcing the user's entry.
+         */
         socket.on("joinRoom", async ({ username, room }) => {
             socket.join(room);
-            users[username] = socket.id; // ✅ Store user socket ID
+            users[username] = socket.id;
 
-            console.log(`📌 ${username} joined public room: ${room}`);
+            console.log(`${username} joined public room: ${room}`);
 
             io.to(room).emit("roomMembers", users[room]);
-            // ✅ Send previous messages from MongoDB
+            
             const messages = await Message.find({ room }).sort({ timestamp: 1 });
             socket.emit("loadMessages", messages);
 
             io.to(room).emit("message", { username: "System", message: `${username} joined ${room}` });
         });
 
-        // ✅ Handle public chat messages
+        /**
+         * Handles sending messages in a chat room.
+         * - Stores the message in MongoDB.
+         * - Broadcasts the message to all members of the room.
+         */
         socket.on("chatMessage", async ({ username, room, message }) => {
-            console.log(`📨 Public Message from ${username} in room ${room}: ${message}`);
+            console.log(`Public Message from ${username} in room ${room}: ${message}`);
 
-            // ✅ Save the message in MongoDB
             const newMessage = new Message({ username, room, message });
             await newMessage.save();
 
-            // ✅ Send the message to the room
             io.to(room).emit("message", { username, message });
         });
 
-    
-
-        // ✅ Typing indicator functionality
+        /**
+         * Handles typing indicators.
+         * - Notifies all users in the room when a user is typing.
+         */
         socket.on("typing", ({ username, room }) => {
             socket.to(room).emit("displayTyping", { username });
         });
 
+        /**
+         * Handles stopping of typing indicators.
+         * - Notifies all users in the room when a user stops typing.
+         */
         socket.on("stopTyping", ({ room }) => {
             socket.to(room).emit("hideTyping");
         });
 
+        /**
+         * Handles a user leaving a chat room.
+         * - Removes the user from the room.
+         * - Updates the list of current members.
+         * - Broadcasts updated room members.
+         */
         socket.on("leaveRoom", ({ username, room }) => {
             socket.leave(room);
         
@@ -51,39 +78,37 @@ module.exports = function (io) {
                 users[room] = users[room].filter(user => user !== username);
             }
         
-            console.log(`🚪 ${username} left room: ${room}`);
-            console.log(`🔴 Current members in ${room}:`, users[room]);
+            console.log(`${username} left room: ${room}`);
+            console.log(`Current members in ${room}:`, users[room]);
         
-            io.to(room).emit("roomMembers", users[room]); // ✅ Emit updated member list
+            io.to(room).emit("roomMembers", users[room]);
         });
 
-            //         // Add this near your other socket listeners
-            // socket.on("roomMembers", (members) => {
-            //     console.log("Received room members:", members); // Add this debug line
-            //     updateMembersList(members);
-            // });
-
-            socket.on("disconnect", () => {
-                let disconnectedUser = null;
-                
-                for (const room in users) {
-                    if (Array.isArray(users[room])) { // ✅ Ensure it's an array before filtering
-                        users[room] = users[room].filter(user => {
-                            if (user === socket.username) {
-                                disconnectedUser = user;
-                                return false; // Remove user
-                            }
-                            return true;
-                        });
+        /**
+         * Handles user disconnection.
+         * - Removes the user from all rooms they were part of.
+         * - Updates the room members list and broadcasts the update.
+         */
+        socket.on("disconnect", () => {
+            let disconnectedUser = null;
             
-                        io.to(room).emit("roomMembers", users[room]); // ✅ Update the room members
-                    }
+            for (const room in users) {
+                if (Array.isArray(users[room])) {
+                    users[room] = users[room].filter(user => {
+                        if (user === socket.username) {
+                            disconnectedUser = user;
+                            return false;
+                        }
+                        return true;
+                    });
+        
+                    io.to(room).emit("roomMembers", users[room]);
                 }
-            
-                if (disconnectedUser) {
-                    console.log(`❌ ${disconnectedUser} disconnected from chat.`);
-                }
-            });
-             
+            }
+        
+            if (disconnectedUser) {
+                console.log(`${disconnectedUser} disconnected from chat.`);
+            }
+        });
     });
 };

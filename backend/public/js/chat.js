@@ -43,11 +43,11 @@ socket.on("message", (data) => {
     chatBox.scrollTop = chatBox.scrollHeight;
 });
 socket.on("roomMembers", (members) => {
-    console.log("Received room members:", members); // ✅ Debugging
+    console.log("Received room members:", members); 
     updateMembersList(members);
 });
 function updateMembersList(members) {
-    console.log("Updating members list with:", members); // Add debug logging
+    console.log("Updating members list with:", members); 
     const membersList = document.getElementById("membersList");
     if (!membersList) {
         console.error("membersList element not found!");
@@ -95,7 +95,7 @@ function sendMessage() {
 }
 
 function leaveRoom() {
-    socket.emit("leaveRoom", { username, room }); // Notify server
-    sessionStorage.removeItem("chatRoom"); // ✅ Remove room only for this tab
-    window.location.href = "../view/join-room.html"; // Redirect to the join-room page
+    socket.emit("leaveRoom", { username, room }); 
+    sessionStorage.removeItem("chatRoom");
+    window.location.href = "../view/join-room.html"; 
 }
